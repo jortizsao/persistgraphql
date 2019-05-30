@@ -7,6 +7,7 @@ It scans a code directory and extracts GraphQL query documents from `.graphql` f
 The npm package also provides a network interface for [Apollo Client](https://github.com/apollostack/apollo-client) that manages the query lookups in `persistgraphql/lib/browser`. To see how to extract the queries on the server, see the [code snippets](#server-side) below.
 
 # Installation
+
 For only the CLI tool:
 
 ```shell
@@ -79,9 +80,9 @@ By default, the IDs for the queries will be set in sequential order by when they
 
 `sha1` identical to md5, except uses the sha1 hashing algorithm
 
+`sha256` identical to sha1, except uses the sha256 hashing algorithm
+
 `uuid` creates a uuidv4 for each query
-
-
 
 # Apollo Client Network Interface
 
@@ -110,6 +111,7 @@ app.use(
   },
 );
 ```
+
 Here's an example with a Hapi server extension using the `lodash` `invert` method:
 
 ```js

@@ -1,5 +1,5 @@
 {
-  "name": "persistgraphql",
+  "name": "@jortizsao/persistgraphql",
   "version": "0.3.11",
   "description": "A build tool for GraphQL projects.",
   "main": "lib/index.js",
