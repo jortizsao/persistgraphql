@@ -2,6 +2,7 @@
 import crypto = require("crypto");
 import fs = require("fs");
 import path = require("path");
+const { promisify } = require("util");
 
 import {
   parse,
@@ -38,6 +39,7 @@ import {
 import { addTypenameTransformer } from "./queryTransformers";
 
 import _ = require("lodash");
+import redis = require("redis");
 
 export type HashTypeOption = "md5" | "sha1" | "sha256" | "sequential" | "uuid";
 
@@ -56,6 +58,8 @@ export type ExtractGQLOptions = {
   extension?: string;
   inJsCode?: boolean;
   hashType?: HashTypeOption;
+  redisUrl?: string;
+  redisPrefix?: string;
 };
 
 export class ExtractGQL {
@@ -80,6 +84,15 @@ export class ExtractGQL {
 
   // The template literal tag for GraphQL queries in JS code
   public literalTag: string = "gql";
+
+  // The redis host including port separated by colon
+  public redisUrl: string;
+
+  // The redis password
+  public redisPassword: string;
+
+  // The redis prefix (namespace)
+  public redisPrefix: string;
 
   // Given a file path, this returns the extension of the file within the
   // file path.
@@ -123,7 +136,9 @@ export class ExtractGQL {
     queryTransformers = [],
     extension = "graphql",
     inJsCode = false,
-    hashType = "sequential"
+    hashType = "sequential",
+    redisUrl,
+    redisPrefix = "graphqlQueries"
   }: ExtractGQLOptions) {
     this.inputFilePath = inputFilePath;
     this.outputFilePath = outputFilePath;
@@ -131,6 +146,8 @@ export class ExtractGQL {
     this.extension = extension;
     this.inJsCode = inJsCode;
     this.hashType = hashType;
+    this.redisUrl = redisUrl;
+    this.redisPrefix = redisPrefix;
   }
 
   // Add a query transformer to the end of the list of query transformers.
@@ -388,6 +405,33 @@ export class ExtractGQL {
     });
   }
 
+  public async pushToRedis(outputMap: OutputMap): Promise<void> {
+    console.log("Pushing to redis...");
+    const mapToPush = _.invert(outputMap);
+    const client = redis.createClient({
+      url: this.redisUrl,
+      prefix: `${this.redisPrefix}:`
+    });
+
+    client.on("error", function(err) {
+      console.error("Error pushing to redis", err.message);
+      throw err;
+    });
+
+    const setAsync = promisify(client.set).bind(client);
+
+    const promises = [];
+    for (let [key, value] of Object.entries(mapToPush)) {
+      console.log("\tPushing query with id:", key);
+      promises.push(setAsync(key, value));
+    }
+
+    await Promise.all(promises);
+
+    console.log("All queries pushed");
+    client.quit();
+  }
+
   // Extracts GraphQL queries from this.inputFilePath and produces
   // an output JSON file in this.outputFilePath.
   public extract() {
@@ -396,6 +440,11 @@ export class ExtractGQL {
         this.writeOutputMap(outputMap, this.outputFilePath)
           .then(() => {
             console.log(`Wrote output file to ${this.outputFilePath}.`);
+          })
+          .then(() => {
+            if (this.redisUrl) {
+              this.pushToRedis(outputMap);
+            }
           })
           .catch(err => {
             console.log(
@@ -468,6 +517,14 @@ export const main = (argv: YArgsv) => {
       process.exit(1);
     }
     options.hashType = argv["hash"];
+  }
+
+  if (argv["redisUrl"]) {
+    options.redisUrl = argv["redisUrl"];
+  }
+
+  if (argv["redisPrefix"]) {
+    options.redisPrefix = argv["redisPrefix"];
   }
 
   new ExtractGQL(options).extract();
